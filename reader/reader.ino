@@ -28,6 +28,8 @@ uint8_t id;
 
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 
+#define RED_LED 12
+#define GREEN_LED 13
 // text sizes
 // 1 = 8px
 // 3 = 16px
@@ -36,6 +38,10 @@ bool wifiReady = false;
 
 void setup() {
   Serial.begin(115200);
+  pinMode(RED_LED, OUTPUT);
+  pinMode(GREEN_LED, OUTPUT);
+  digitalWrite(RED_LED, HIGH);
+  digitalWrite(GREEN_LED, LOW);
   if (!oled.begin(SSD1306_SWITCHCAPVCC, OLED_SCREEN_ADDRESS)) {
     Serial.println("SSD1306 allocation failed");
     for (;;)
@@ -95,6 +101,8 @@ void loop()  // run over and over again
     }
     // delay(500);
   }
+  digitalWrite(RED_LED, LOW);
+  digitalWrite(GREEN_LED, HIGH);
   receivedString = "";
   oled.clearDisplay();
   oled.setTextColor(WHITE);
@@ -105,6 +113,8 @@ void loop()  // run over and over again
 
   int id = getFingerprintIDez();
   if (id > 0) {
+    digitalWrite(RED_LED, HIGH);
+    digitalWrite(GREEN_LED, LOW);
     // String fingerprintId = String(("%d", id);
     oled.clearDisplay();
     oled.setTextColor(WHITE);
@@ -141,6 +151,8 @@ void loop()  // run over and over again
     oled.print(receivedString);
     oled.display();
     delay(3000);
+    digitalWrite(RED_LED, LOW);
+    digitalWrite(GREEN_LED, HIGH);
   }
   delay(50);  //don't ned to run this at full speed.
 }
