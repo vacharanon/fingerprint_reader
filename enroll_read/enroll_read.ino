@@ -205,7 +205,7 @@ void loop()  // run over and over again
       oled.display();
       while (Serial.available() == 0) {}  //wait for data available
 
-      receivedString = Serial.readStringUntil('\n');
+      receivedString = Serial.readStringUntil('\n').substring(9); // remove the [ESP8266]
       oled.clearDisplay();
       oled.setTextColor(WHITE);
       oled.setCursor(0, 0);
