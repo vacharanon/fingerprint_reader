@@ -211,6 +211,16 @@ void loop()  // run over and over again
         oled.setTextSize(3);
         oled.print(httpCode);
         oled.display();
+        if (httpCode != 200) {
+            // Blink rapidly for 3 seconds
+            unsigned long blinkStart = millis();
+            while (millis() - blinkStart < 3000) {
+            digitalWrite(RED_LED, HIGH);
+            delay(100);
+            digitalWrite(RED_LED, LOW);
+            delay(100);
+            }
+        }
         delay(3000);
         http.end();
       }
