@@ -10,6 +10,10 @@
 #include <WiFiClientSecure.h>
 #include "secrets.h"
 
+#define MAX_ID 128
+
+const char DIGITS[] = "0123456789";
+
 #define OLED_SCREEN_WIDTH 128     // pixel
 #define OLED_SCREEN_HEIGHT 32     // pixel
 #define OLED_SCREEN_ADDRESS 0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
@@ -97,7 +101,8 @@ void setup() {
     oled.setTextSize(2);
     oled.println("MODE");
     oled.setTextSize(1);
-    oled.println("A=reader,B=enroll");
+    oled.println("A) Reader B) Enroll");
+    oled.println("C) Delete D) Status");
     oled.print("Autoselect in ");
     oled.print(secondsLeft);
     oled.display();
@@ -111,6 +116,12 @@ void setup() {
         break;
       } else if (ch == 'B') {
         mode = 2;
+        break;
+      } else if (ch == 'C') {
+        mode = 3;
+        break;
+      } else if (ch == 'D') {
+        mode = 4;
         break;
       }
     }
@@ -128,6 +139,20 @@ void setup() {
     oled.setCursor(0, 0);
     oled.setTextSize(3);
     oled.println("ENROLL");
+    oled.display();
+  } else if (mode == 3) {
+    oled.clearDisplay();
+    oled.setTextColor(WHITE);
+    oled.setCursor(0, 0);
+    oled.setTextSize(3);
+    oled.println("DELETE");
+    oled.display();
+  } else if (mode == 4) {
+    oled.clearDisplay();
+    oled.setTextColor(WHITE);
+    oled.setCursor(0, 0);
+    oled.setTextSize(3);
+    oled.println("STATUS");
     oled.display();
   }
 }
@@ -205,33 +230,26 @@ void loop()  // run over and over again
         int httpCode = http.POST(jsonPayload);
 
         Serial.println(httpCode);
-        oled.clearDisplay();
-        oled.setTextColor(WHITE);
-        oled.setCursor(0, 0);
-        oled.setTextSize(3);
-        oled.print(httpCode);
-        oled.display();
-        if (httpCode != 200) {
-            // Blink rapidly for 3 seconds
-            unsigned long blinkStart = millis();
-            while (millis() - blinkStart < 3000) {
-            digitalWrite(RED_LED, HIGH);
-            delay(100);
-            digitalWrite(RED_LED, LOW);
-            delay(100);
-            }
+        
+        if (httpCode == 200) {
+          oled.clearDisplay();
+          oled.setTextColor(WHITE);
+          oled.setCursor(0, 0);
+          oled.setTextSize(3);
+          oled.print(httpCode);
+          oled.display();
+        } else {
+          printError(String(httpCode), 3);
         }
-        delay(3000);
         http.end();
       }
 
       digitalWrite(RED_LED, LOW);
       digitalWrite(GREEN_LED, HIGH);
     }
-    delay(50);
   } else if (mode == 2) {
-    digitalWrite(RED_LED, LOW);
-    digitalWrite(GREEN_LED, HIGH);
+    digitalWrite(RED_LED, HIGH);
+    digitalWrite(GREEN_LED, LOW);
     String receivedString;
     while (1) {
       if (receivedString != "") {
@@ -253,7 +271,7 @@ void loop()  // run over and over again
       if (ch) {
         if (ch == '#') {
           id = receivedString.toInt();
-          if (id == 0 || id > 128) {  // ID #0 not allowed, try again!
+          if (id == 0 || id > MAX_ID) {  // ID #0 not allowed, try again!
             oled.clearDisplay();
             oled.setTextColor(WHITE);
             oled.setCursor(0, 0);
@@ -413,12 +431,6 @@ void loop()  // run over and over again
               printError("Unknown error");
               return;
             }
-            // if (p == FINGERPRINT_OK) {
-            //   // Serial.println("Stored!");
-            // } else {
-            //   printError("Unknown error");
-            //   return p;
-            // }
 
             receivedString = "";
             oled.clearDisplay();
@@ -433,21 +445,139 @@ void loop()  // run over and over again
             delay(3000);
             break;
           }
-        } else if (ch == '0' || ch == '1' || ch == '2' || ch == '3' || ch == '4' || ch == '5' || ch == '6' || ch == '7' || ch == '8' || ch == '9') {
+        } else if (strchr(DIGITS, ch)) {
           receivedString += ch;
         }
       }
     }
-    delay(50);
-  }
-}
+  } else if (mode == 3) {
+    digitalWrite(RED_LED, HIGH);
+    digitalWrite(GREEN_LED, LOW);
+    String receivedString;
+    while (1) {
+      if (receivedString != "") {
+        oled.clearDisplay();
+        oled.setTextColor(WHITE);
+        oled.setCursor(0, 0);
+        oled.setTextSize(3);
+        oled.print(receivedString);
+        oled.display();
+      } else {
+        oled.clearDisplay();
+        oled.setTextColor(WHITE);
+        oled.setCursor(0, 0);
+        oled.setTextSize(1);
+        oled.print("Type in the ID to delete then #");
+        oled.display();
+      }
+      char ch = keypad.getKey();
+      if (ch) {
+        if (ch == '#') {
+          id = receivedString.toInt();
+          if (id == 0 || id > MAX_ID) {  // ID #0 not allowed, try again!
+            oled.clearDisplay();
+            oled.setTextColor(WHITE);
+            oled.setCursor(0, 0);
+            oled.setTextSize(3);
+            oled.print("Invalid");
+            oled.display();
+            delay(1000);
+            break;
+          } else {
+            int p = finger.deleteModel(id);
+            if (p == FINGERPRINT_OK) {
+              Serial.println("Deleted!");
+              oled.clearDisplay();
+              oled.setTextColor(WHITE);
+              oled.setCursor(0, 0);
+              oled.setTextSize(2);
+              oled.println("Deleted");
+              oled.display();
+              delay(2000);
+            } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
+              printError("Communication error");
+              return;
+            } else if (p == FINGERPRINT_BADLOCATION) {
+              printError("Could not delete in that location");
+              return;
+            } else if (p == FINGERPRINT_FLASHERR) {
+              printError("Error writing to flash");
+              return;
+            } else {
+              printError("Unknown error");
+              return;
+            }
 
+            receivedString = "";
+            break;
+          }
+        } else if (strchr(DIGITS, ch)) {
+          receivedString += ch;
+        }
+      }
+    }
+  } else if (mode == 4) {
+    digitalWrite(RED_LED, HIGH);
+    digitalWrite(GREEN_LED, LOW);
+
+    int p = finger.getTemplateCount();
+    if (p == FINGERPRINT_OK) {
+      Serial.print("Sensor contains ");
+      Serial.print(finger.templateCount);
+      Serial.println(" templates");
+      oled.clearDisplay();
+      oled.setTextColor(WHITE);
+      oled.setCursor(0, 0);
+      oled.setTextSize(2);
+      oled.print("Templates:");
+      oled.print(finger.templateCount);
+      oled.print("/");
+      oled.println(MAX_ID);
+      oled.display();
+      delay(3000);
+      // list all used IDs
+      // using scrolling text if too many IDs
+      // oled.clearDisplay();
+      // oled.setTextColor(WHITE);
+      // oled.setCursor(0, 0);
+      // oled.setTextSize(2);
+      // oled.println("IDs:");
+      // for (uint8_t i = 1; i <= MAX_ID; i++) {
+      //   p = finger.loadModel(i);
+      //   if (p == FINGERPRINT_OK) {
+      //     oled.print(i);
+      //     oled.print(" ");
+      //   }
+      // }
+      // oled.display();
+      // oled.startscrollleft(0, 15);
+      // delay(3000);
+      // oled.stopscroll();
+      // delay(3000);
+    } else {
+      printError("Could not get template count");
+      return;
+    }
+  }
+  delay(50);
+
+}
 void printError(String error) {
+  printError(error, 1);
+}
+void printError(String error, uint8_t textSize) {
   oled.clearDisplay();
   oled.setTextColor(WHITE);
   oled.setCursor(0, 0);
-  oled.setTextSize(1);
+  oled.setTextSize(textSize);
   oled.print(error);
   oled.display();
-  delay(3000);
+   // Blink rapidly for 3 seconds
+  unsigned long blinkStart = millis();
+  while (millis() - blinkStart < 3000) {
+    digitalWrite(RED_LED, HIGH);
+    delay(100);
+    digitalWrite(RED_LED, LOW);
+    delay(100);
+  }
 }
