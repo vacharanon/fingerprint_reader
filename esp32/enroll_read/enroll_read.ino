@@ -177,8 +177,27 @@ void loop()  // run over and over again
       Serial.print("SSID: ");
       Serial.println(WiFi.SSID());
 
-      client.setCACert(digicert_root_ca);
+      client.setInsecure();
+      //client.setCACert(digicert_root_ca);
       wifiReady = true;
+    }
+    if (wifiReady) {
+      if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi no longer connected. Attempting to reconnect...");
+        WiFi.disconnect();
+        WiFi.reconnect();
+        oled.clearDisplay();
+        oled.setTextColor(WHITE);
+        oled.setCursor(0, 0);
+        oled.setTextSize(3);
+        oled.println("Reconnecting");
+        delay(2000);  
+        if (WiFi.status() != WL_CONNECTED) { 
+          Serial.println("WiFi connection still unavailable.");
+          return;   
+        }
+        Serial.println("WiFi connection reestablished.");
+      }
     }
     digitalWrite(RED_LED, LOW);
     digitalWrite(GREEN_LED, HIGH);
@@ -236,10 +255,48 @@ void loop()  // run over and over again
           oled.setTextColor(WHITE);
           oled.setCursor(0, 0);
           oled.setTextSize(3);
-          oled.print(httpCode);
+          // oled.print(httpCode);
+          oled.print("OK");
           oled.display();
+          delay(2000);  
         } else {
-          printError(String(httpCode), 3);
+         switch (httpCode) {
+            case HTTPC_ERROR_CONNECTION_REFUSED:
+              printError("Connection refused", 2);
+              break;
+            case HTTPC_ERROR_SEND_HEADER_FAILED:
+              printError("Send header failed", 2);
+              break;
+            case HTTPC_ERROR_SEND_PAYLOAD_FAILED:
+              printError("Send payload failed", 2);
+              break;
+            case HTTPC_ERROR_NOT_CONNECTED:
+              printError("Not connected", 2);
+              break;
+            case HTTPC_ERROR_CONNECTION_LOST:
+              printError("Connection lost", 2);
+              break;
+            case HTTPC_ERROR_NO_STREAM:
+              printError("No stream", 2);
+              break;
+            case HTTPC_ERROR_NO_HTTP_SERVER:
+              printError("No HTTP server", 2);
+              break;
+            case HTTPC_ERROR_TOO_LESS_RAM:
+              printError("Too less RAM", 2);
+              break;
+            case HTTPC_ERROR_ENCODING:
+              printError("Encoding error", 2);
+              break;
+            case HTTPC_ERROR_STREAM_WRITE:
+              printError("Stream write error", 2);
+              break;
+            case HTTPC_ERROR_READ_TIMEOUT:
+              printError("Read timeout", 2);
+              break;
+            default:
+              printError(String(httpCode), 3);
+          }
         }
         http.end();
       }
