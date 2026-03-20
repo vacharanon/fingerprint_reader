@@ -149,6 +149,10 @@ I2C Keypad (PCF8574) ESP32
   SDA  ----------->  SDA (shared I2C bus)
 ```
 
+### Wiring Diagram (ESP32 Full-Featured)
+
+![ESP32 enroll_read wiring diagram](enroll_read_diagram.jpeg)
+
 ## Project Structure
 
 ```

@@ -3,5 +3,7 @@ secrets.h
 desktop/secrets.js
 desktop/node_modules/
 
+.vscode/
+
 #Ignore vscode AI rules
 .github/instructions/codacy.instructions.md
