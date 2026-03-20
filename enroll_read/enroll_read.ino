@@ -203,7 +203,22 @@ void loop()  // run over and over again
       oled.setTextSize(3);
       oled.print("Sending");
       oled.display();
-      while (Serial.available() == 0) {}  //wait for data available
+      unsigned long waitStart = millis();
+      while (Serial.available() == 0) {
+        if (millis() - waitStart > 10000) { // 10s timeout
+          oled.clearDisplay();
+          oled.setCursor(0, 0);
+          oled.setTextSize(2);
+          oled.print("Timeout");
+          oled.display();
+          delay(2000);
+          break;
+        }
+      }
+      if (Serial.available() == 0) {
+        delay(50);
+        break;
+      }
 
       receivedString = Serial.readStringUntil('\n').substring(9); // remove the [ESP8266]
       oled.clearDisplay();
@@ -385,8 +400,10 @@ void loop()  // run over and over again
             delay(3000);
             break;
           }
-        } else if (ch == '0' || ch == '1' || ch == '2' || ch == '3' || ch == '4' || ch == '5' || ch == '6' || ch == '7' || ch == '8' || ch == '9') {
-          receivedString += ch;
+        } else if (ch >= '0' && ch <= '9') {
+          if (receivedString.length() < 3) { // max 3 digits (IDs 1-128)
+            receivedString += ch;
+          }
         }
       }
     }

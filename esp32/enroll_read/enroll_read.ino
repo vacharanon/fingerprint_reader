@@ -8,9 +8,18 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <ArduinoOTA.h>
 #include "secrets.h"
 
 #define MAX_ID 128
+#define BOOT_DELAY 1000
+#define FEEDBACK_DELAY 2000
+#define RESULT_DELAY 3000
+#define LOOP_DELAY 50
+#define MODE_SELECT_TIMEOUT 3000
+#define ERROR_BLINK_DURATION 3000
+#define ERROR_BLINK_INTERVAL 100
+#define OTA_HOSTNAME "fingerprint-reader"
 
 const char DIGITS[] = "0123456789";
 
@@ -49,8 +58,22 @@ uint8_t mode = 1;
 
 const char *host = HOST;
 bool wifiReady = false;
+bool otaInProgress = false;
 WiFiClientSecure client;
 HTTPClient http;
+
+// Display a single text string on OLED (clears screen first)
+void oledShow(const char *text, uint8_t textSize) {
+  oled.clearDisplay();
+  oled.setTextColor(WHITE);
+  oled.setCursor(0, 0);
+  oled.setTextSize(textSize);
+  oled.print(text);
+  oled.display();
+}
+void oledShow(const String &text, uint8_t textSize) {
+  oledShow(text.c_str(), textSize);
+}
 
 void setup() {
 
@@ -76,7 +99,72 @@ void setup() {
   oled.setTextSize(3);
   oled.println("PALO IT");
   oled.display();
-  delay(1000);  // Pause for 2 seconds
+  delay(BOOT_DELAY);
+
+  // Connect WiFi early so OTA is available in all modes
+  oledShow("WiFi...", 2);
+  Serial.print("Connecting to SSID: ");
+  Serial.println(ssid);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  unsigned long wifiStart = millis();
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+    digitalWrite(RED_LED, !digitalRead(RED_LED));
+    if (millis() - wifiStart > 15000) {
+      Serial.println("\nWiFi connection timed out — continuing without WiFi");
+      break;
+    }
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFi.setAutoReconnect(true);
+    Serial.print("\nSSID: ");
+    Serial.println(WiFi.SSID());
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+    wifiReady = true;
+
+    // TODO: Replace with client.setCACert(root_ca) for production
+    client.setInsecure();  // WARNING: disables SSL verification — PoC only
+
+    // OTA setup
+    ArduinoOTA.setHostname(OTA_HOSTNAME);
+    ArduinoOTA.onStart([]() {
+      otaInProgress = true;
+      oledShow("OTA Update", 2);
+      Serial.println("OTA start");
+    });
+    ArduinoOTA.onEnd([]() {
+      otaInProgress = false;
+      oledShow("OTA Done!", 2);
+      Serial.println("OTA end");
+    });
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+      unsigned int pct = progress / (total / 100);
+      oled.clearDisplay();
+      oled.setTextColor(WHITE);
+      oled.setCursor(0, 0);
+      oled.setTextSize(2);
+      oled.println("Updating");
+      oled.setTextSize(3);
+      oled.print(pct);
+      oled.println("%");
+      oled.display();
+      Serial.printf("OTA Progress: %u%%\r", pct);
+    });
+    ArduinoOTA.onError([](ota_error_t error) {
+      otaInProgress = false;
+      Serial.printf("OTA Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) printError("OTA Auth Fail", 2);
+      else if (error == OTA_BEGIN_ERROR) printError("OTA Begin Fail", 2);
+      else if (error == OTA_CONNECT_ERROR) printError("OTA Connect Fail", 2);
+      else if (error == OTA_RECEIVE_ERROR) printError("OTA Recv Fail", 2);
+      else if (error == OTA_END_ERROR) printError("OTA End Fail", 2);
+    });
+    ArduinoOTA.begin();
+    Serial.println("OTA ready — hostname: " + String(OTA_HOSTNAME));
+  }
 
   finger.begin(57600);
 
@@ -106,7 +194,7 @@ void setup() {
     oled.print("Autoselect in ");
     oled.print(secondsLeft);
     oled.display();
-    if (now - start >= 3000) {
+    if (now - start >= MODE_SELECT_TIMEOUT) {
       break;
     }
     char ch = keypad.getKey();
@@ -127,41 +215,28 @@ void setup() {
     }
   }
   if (mode == 1) {
-    oled.clearDisplay();
-    oled.setTextColor(WHITE);
-    oled.setCursor(0, 0);
-    oled.setTextSize(3);
-    oled.println("READER");
-    oled.display();
+    oledShow("READER", 3);
   } else if (mode == 2) {
-    oled.clearDisplay();
-    oled.setTextColor(WHITE);
-    oled.setCursor(0, 0);
-    oled.setTextSize(3);
-    oled.println("ENROLL");
-    oled.display();
+    oledShow("ENROLL", 3);
   } else if (mode == 3) {
-    oled.clearDisplay();
-    oled.setTextColor(WHITE);
-    oled.setCursor(0, 0);
-    oled.setTextSize(3);
-    oled.println("DELETE");
-    oled.display();
+    oledShow("DELETE", 3);
   } else if (mode == 4) {
-    oled.clearDisplay();
-    oled.setTextColor(WHITE);
-    oled.setCursor(0, 0);
-    oled.setTextSize(3);
-    oled.println("STATUS");
-    oled.display();
+    oledShow("STATUS", 3);
   }
 }
 
 void loop()  // run over and over again
 {
+  // Handle OTA in every loop iteration, regardless of mode
+  if (wifiReady) {
+    ArduinoOTA.handle();
+  }
+  if (otaInProgress) return;  // pause normal operation during OTA
+
   if (mode == 1) {
     String receivedString;
     while (!wifiReady) {
+      // WiFi failed at boot — retry once
       Serial.print("Connecting to SSID: ");
       Serial.println(ssid);
       WiFi.mode(WIFI_STA);
@@ -173,12 +248,10 @@ void loop()  // run over and over again
       }
       Serial.println("");
       WiFi.setAutoReconnect(true);
-      // printWifiStatus();
       Serial.print("SSID: ");
       Serial.println(WiFi.SSID());
 
       client.setInsecure();
-      //client.setCACert(digicert_root_ca);
       wifiReady = true;
     }
     if (wifiReady) {
@@ -186,12 +259,8 @@ void loop()  // run over and over again
         Serial.println("WiFi no longer connected. Attempting to reconnect...");
         WiFi.disconnect();
         WiFi.reconnect();
-        oled.clearDisplay();
-        oled.setTextColor(WHITE);
-        oled.setCursor(0, 0);
-        oled.setTextSize(3);
-        oled.println("Reconnecting");
-        delay(2000);  
+        oledShow("Reconnecting", 3);
+        delay(FEEDBACK_DELAY);  
         if (WiFi.status() != WL_CONNECTED) { 
           Serial.println("WiFi connection still unavailable.");
           return;   
@@ -202,12 +271,7 @@ void loop()  // run over and over again
     digitalWrite(RED_LED, LOW);
     digitalWrite(GREEN_LED, HIGH);
     receivedString = "";
-    oled.clearDisplay();
-    oled.setTextColor(WHITE);
-    oled.setCursor(0, 0);
-    oled.setTextSize(3);
-    oled.println("Ready");
-    oled.display();
+    oledShow("Ready", 3);
 
     uint8_t p = finger.getImage();
     if (p != FINGERPRINT_OK) return;
@@ -228,37 +292,30 @@ void loop()  // run over and over again
       oled.setTextSize(3);
       oled.print("ID=");
       oled.println(id);
+      oled.setTextSize(1);
+      oled.print("Confidence: ");
+      oled.println(finger.confidence);
       oled.display();
       Serial.print("[F_ID]");
       Serial.print(id);
-      Serial.print("\n");
-      delay(1000);
+      Serial.print(" conf=");
+      Serial.println(finger.confidence);
+      delay(BOOT_DELAY);
 
-      oled.clearDisplay();
-      oled.setTextColor(WHITE);
-      oled.setCursor(0, 0);
-      oled.setTextSize(3);
-      oled.print("Sending");
-      oled.display();
+      oledShow("Sending", 3);
 
       if (http.begin(client, host)) {
         http.addHeader("Content-Type", "application/json");
+        http.addHeader("Authorization", "Bearer " + String(apiKey));
 
-        // Use the extracted ID in the JSON payload
-        String jsonPayload = "{\"api_key\":\"" + String(apiKey) + "\",\"id\":" + id + "}";
+        String jsonPayload = "{\"id\":" + String(id) + "}";
         int httpCode = http.POST(jsonPayload);
 
         Serial.println(httpCode);
         
         if (httpCode == 200) {
-          oled.clearDisplay();
-          oled.setTextColor(WHITE);
-          oled.setCursor(0, 0);
-          oled.setTextSize(3);
-          // oled.print(httpCode);
-          oled.print("OK");
-          oled.display();
-          delay(2000);  
+          oledShow("OK", 3);
+          delay(FEEDBACK_DELAY);  
         } else {
          switch (httpCode) {
             case HTTPC_ERROR_CONNECTION_REFUSED:
@@ -329,13 +386,8 @@ void loop()  // run over and over again
         if (ch == '#') {
           id = receivedString.toInt();
           if (id == 0 || id > MAX_ID) {  // ID #0 not allowed, try again!
-            oled.clearDisplay();
-            oled.setTextColor(WHITE);
-            oled.setCursor(0, 0);
-            oled.setTextSize(3);
-            oled.print("Invalid");
-            oled.display();
-            delay(1000);
+            oledShow("Invalid", 3);
+            delay(BOOT_DELAY);
             break;
           } else {
             int p = -1;
@@ -393,13 +445,8 @@ void loop()  // run over and over again
                 return;
             }
 
-            oled.clearDisplay();
-            oled.setTextColor(WHITE);
-            oled.setCursor(0, 0);
-            oled.setTextSize(2);
-            oled.println("Remove");
-            oled.display();
-            delay(2000);
+            oledShow("Remove", 2);
+            delay(FEEDBACK_DELAY);
             p = 0;
             while (p != FINGERPRINT_NOFINGER) {
               p = finger.getImage();
@@ -499,11 +546,13 @@ void loop()  // run over and over again
             oled.setTextSize(2);
             oled.println("DONE");
             oled.display();
-            delay(3000);
+            delay(RESULT_DELAY);
             break;
           }
         } else if (strchr(DIGITS, ch)) {
-          receivedString += ch;
+          if (receivedString.length() < 3) { // max 3 digits (IDs 1-128)
+            receivedString += ch;
+          }
         }
       }
     }
@@ -532,25 +581,15 @@ void loop()  // run over and over again
         if (ch == '#') {
           id = receivedString.toInt();
           if (id == 0 || id > MAX_ID) {  // ID #0 not allowed, try again!
-            oled.clearDisplay();
-            oled.setTextColor(WHITE);
-            oled.setCursor(0, 0);
-            oled.setTextSize(3);
-            oled.print("Invalid");
-            oled.display();
-            delay(1000);
+            oledShow("Invalid", 3);
+            delay(BOOT_DELAY);
             break;
           } else {
             int p = finger.deleteModel(id);
             if (p == FINGERPRINT_OK) {
               Serial.println("Deleted!");
-              oled.clearDisplay();
-              oled.setTextColor(WHITE);
-              oled.setCursor(0, 0);
-              oled.setTextSize(2);
-              oled.println("Deleted");
-              oled.display();
-              delay(2000);
+              oledShow("Deleted", 2);
+              delay(FEEDBACK_DELAY);
             } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
               printError("Communication error");
               return;
@@ -569,7 +608,9 @@ void loop()  // run over and over again
             break;
           }
         } else if (strchr(DIGITS, ch)) {
-          receivedString += ch;
+          if (receivedString.length() < 3) { // max 3 digits (IDs 1-128)
+            receivedString += ch;
+          }
         }
       }
     }
@@ -591,50 +632,26 @@ void loop()  // run over and over again
       oled.print("/");
       oled.println(MAX_ID);
       oled.display();
-      delay(3000);
-      // list all used IDs
-      // using scrolling text if too many IDs
-      // oled.clearDisplay();
-      // oled.setTextColor(WHITE);
-      // oled.setCursor(0, 0);
-      // oled.setTextSize(2);
-      // oled.println("IDs:");
-      // for (uint8_t i = 1; i <= MAX_ID; i++) {
-      //   p = finger.loadModel(i);
-      //   if (p == FINGERPRINT_OK) {
-      //     oled.print(i);
-      //     oled.print(" ");
-      //   }
-      // }
-      // oled.display();
-      // oled.startscrollleft(0, 15);
-      // delay(3000);
-      // oled.stopscroll();
-      // delay(3000);
+      delay(RESULT_DELAY);
     } else {
       printError("Could not get template count");
       return;
     }
   }
-  delay(50);
+  delay(LOOP_DELAY);
 
 }
 void printError(String error) {
   printError(error, 1);
 }
 void printError(String error, uint8_t textSize) {
-  oled.clearDisplay();
-  oled.setTextColor(WHITE);
-  oled.setCursor(0, 0);
-  oled.setTextSize(textSize);
-  oled.print(error);
-  oled.display();
-   // Blink rapidly for 3 seconds
+  oledShow(error, textSize);
+  // Blink rapidly for error indication
   unsigned long blinkStart = millis();
-  while (millis() - blinkStart < 3000) {
+  while (millis() - blinkStart < ERROR_BLINK_DURATION) {
     digitalWrite(RED_LED, HIGH);
-    delay(100);
+    delay(ERROR_BLINK_INTERVAL);
     digitalWrite(RED_LED, LOW);
-    delay(100);
+    delay(ERROR_BLINK_INTERVAL);
   }
 }

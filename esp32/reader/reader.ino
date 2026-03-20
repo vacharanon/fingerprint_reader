@@ -124,7 +124,22 @@ void loop()  // run over and over again
     oled.setTextSize(3);
     oled.print("Sending");
     oled.display();
-    while (Serial.available() == 0) {} //wait for data available
+    unsigned long waitStart = millis();
+    while (Serial.available() == 0) {
+      if (millis() - waitStart > 10000) { // 10s timeout
+        oled.clearDisplay();
+        oled.setCursor(0, 0);
+        oled.setTextSize(2);
+        oled.print("Timeout");
+        oled.display();
+        delay(2000);
+        break;
+      }
+    }
+    if (Serial.available() == 0) {
+      delay(50);
+      return;
+    }
 
     receivedString = Serial.readStringUntil('\n');
     oled.clearDisplay();
