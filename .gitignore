@@ -1,5 +1,7 @@
 .DS_Store
 secrets.h
 
+.vscode/
+
 #Ignore vscode AI rules
 .github/instructions/codacy.instructions.md

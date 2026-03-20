@@ -280,7 +280,17 @@ void loop()  // run over and over again
     if (p != FINGERPRINT_OK) return;
 
     p = finger.fingerFastSearch();
-    if (p != FINGERPRINT_OK) return;
+    if (p != FINGERPRINT_OK) {
+      oledShow("No Match", 2);
+      unsigned long blinkStart = millis();
+      while (millis() - blinkStart < FEEDBACK_DELAY) {
+        digitalWrite(RED_LED, HIGH);
+        delay(ERROR_BLINK_INTERVAL);
+        digitalWrite(RED_LED, LOW);
+        delay(ERROR_BLINK_INTERVAL);
+      }
+      return;
+    }
 
     int id = finger.fingerID;
     if (id > 0) {

@@ -2,7 +2,7 @@
 
 > Prioritized backlog as of March 2026. Updated: March 20, 2026.
 >
-> **Progress: 13/18 tasks completed**
+> **Progress: 13/20 tasks completed**
 
 ---
 
@@ -165,12 +165,14 @@ Create `.vscode/c_cpp_properties.json` in the repo root to get proper autocomple
 
 ---
 
-## Suggested Execution Order (remaining items)
+## Suggested Execution Order (remaining 7 items)
 
-1. **SEC-02** — Fix SSL validation (highest security risk remaining)
-2. **SEC-04** — Evaluate anti-replay / liveness detection (hardware research)
-3. **REL-02** — ESP8266 WiFi reconnect (backport from ESP32 pattern)
-4. **REL-04** — Log HTTP response body in `esp8266_send/`
-5. **CQ-04** — Shared Arduino library for common helpers
-6. **FE-03** — Web dashboard on ESP32
-7. **FE-04** — Audit log in SPIFFS/LittleFS
+| # | Task | Effort | Depends On | Notes |
+|---|------|--------|------------|-------|
+| 1 | **SEC-02** — Replace `client.setInsecure()` with `client.setCACert(root_ca)` | Low | Backend team provides PEM root CA cert | Highest security risk remaining — MITM-vulnerable until fixed |
+| 2 | **REL-02** — Add WiFi reconnect logic to `esp8266_send/` | Low | — | Backport `WiFi.status()` check pattern already in ESP32 sketch |
+| 3 | **REL-04** — Parse and log HTTP response body in `esp8266_send/` | Low | — | Currently only status code is captured; aids debugging |
+| 4 | **CQ-04** — Extract shared Arduino library (`lib/FingerprintHelpers/`) | Medium | — | Reduces duplication of OLED, LED, and fingerprint helpers across 8 sketches |
+| 5 | **FE-04** — Audit log in SPIFFS/LittleFS on ESP32 | Medium | — | Store timestamped scan events (ID, result, confidence); prerequisite data for FE-03 dashboard |
+| 6 | **FE-03** — Web dashboard on ESP32 (AsyncWebServer) | Medium | FE-04 | List enrolled IDs, view audit log, delete remotely; depends on stored data from FE-04 |
+| 7 | **SEC-04** — Evaluate anti-replay / liveness detection | Research | — | Hardware decision — compare capacitive vs optical sensors; no code change until hardware selected |
