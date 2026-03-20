@@ -115,7 +115,6 @@ void loop()  // run over and over again
   if (id > 0) {
     digitalWrite(RED_LED, HIGH);
     digitalWrite(GREEN_LED, LOW);
-    // String fingerprintId = String(("%d", id);
     oled.clearDisplay();
     oled.setTextColor(WHITE);
     oled.setCursor(0, 0);
@@ -127,13 +126,6 @@ void loop()  // run over and over again
     Serial.print(id);
     Serial.print("\n");
     delay(1000);
-    // waiting for reply
-    // Serial.println();
-    // while (Serial.available() <= 0) {
-    //   Serial.write(".");
-    //   delay(500);
-    // }
-    // Serial.println();
 
     oled.clearDisplay();
     oled.setTextColor(WHITE);
@@ -141,7 +133,22 @@ void loop()  // run over and over again
     oled.setTextSize(3);
     oled.print("Sending");
     oled.display();
-    while (Serial.available() == 0) {} //wait for data available
+    unsigned long waitStart = millis();
+    while (Serial.available() == 0) {
+      if (millis() - waitStart > 10000) { // 10s timeout
+        oled.clearDisplay();
+        oled.setCursor(0, 0);
+        oled.setTextSize(2);
+        oled.print("Timeout");
+        oled.display();
+        delay(2000);
+        break;
+      }
+    }
+    if (Serial.available() == 0) {
+      delay(50);
+      return;
+    }
 
     receivedString = Serial.readStringUntil('\n');
     oled.clearDisplay();
@@ -157,72 +164,6 @@ void loop()  // run over and over again
   delay(50);  //don't ned to run this at full speed.
 }
 
-// uint8_t getFingerprintID() {
-//   uint8_t p = finger.getImage();
-//   switch (p) {
-//     case FINGERPRINT_OK:
-//       Serial.println("Image taken");
-//       break;
-//     case FINGERPRINT_NOFINGER:
-//       Serial.println("No finger detected");
-//       return p;
-//     case FINGERPRINT_PACKETRECIEVEERR:
-//       Serial.println("Communication error");
-//       return p;
-//     case FINGERPRINT_IMAGEFAIL:
-//       Serial.println("Imaging error");
-//       return p;
-//     default:
-//       Serial.println("Unknown error");
-//       return p;
-//   }
-
-//   // OK success!
-
-//   p = finger.image2Tz();
-//   switch (p) {
-//     case FINGERPRINT_OK:
-//       Serial.println("Image converted");
-//       break;
-//     case FINGERPRINT_IMAGEMESS:
-//       Serial.println("Image too messy");
-//       return p;
-//     case FINGERPRINT_PACKETRECIEVEERR:
-//       Serial.println("Communication error");
-//       return p;
-//     case FINGERPRINT_FEATUREFAIL:
-//       Serial.println("Could not find fingerprint features");
-//       return p;
-//     case FINGERPRINT_INVALIDIMAGE:
-//       Serial.println("Could not find fingerprint features");
-//       return p;
-//     default:
-//       Serial.println("Unknown error");
-//       return p;
-//   }
-
-//   // OK converted!
-//   p = finger.fingerSearch();
-//   if (p == FINGERPRINT_OK) {
-//     Serial.println("Found a print match!");
-//   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
-//     Serial.println("Communication error");
-//     return p;
-//   } else if (p == FINGERPRINT_NOTFOUND) {
-//     Serial.println("Did not find a match");
-//     return p;
-//   } else {
-//     Serial.println("Unknown error");
-//     return p;
-//   }
-
-//   // found a match!
-//   Serial.print("Found ID #"); Serial.print(finger.fingerID);
-//   Serial.print(" with confidence of "); Serial.println(finger.confidence);
-
-//   return finger.fingerID;
-// }
-
 // returns -1 if failed, otherwise returns ID #
 int getFingerprintIDez() {
   uint8_t p = finger.getImage();
@@ -234,10 +175,5 @@ int getFingerprintIDez() {
   p = finger.fingerFastSearch();
   if (p != FINGERPRINT_OK) return -1;
 
-  // found a match!
-  // Serial.print("Found ID #");
-  // Serial.print(finger.fingerID);
-  // Serial.print(" with confidence of ");
-  // Serial.println(finger.confidence);
   return finger.fingerID;
 }

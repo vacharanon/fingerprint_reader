@@ -1,0 +1,98 @@
+name: Arduino CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  compile:
+    name: Compile ${{ matrix.sketch.name }} (${{ matrix.sketch.fqbn }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sketch:
+          # Arduino Uno sketches (Atmega328P)
+          - name: enroll
+            path: enroll
+            fqbn: arduino:avr:uno
+            platform: arduino:avr
+          - name: reader
+            path: reader
+            fqbn: arduino:avr:uno
+            platform: arduino:avr
+          - name: enroll_read
+            path: enroll_read
+            fqbn: arduino:avr:uno
+            platform: arduino:avr
+          - name: i2c_scanner
+            path: i2c_scanner
+            fqbn: arduino:avr:uno
+            platform: arduino:avr
+
+          # ESP8266 sketch
+          - name: esp8266_send
+            path: esp8266_send
+            fqbn: esp8266:esp8266:nodemcuv2
+            platform: esp8266:esp8266
+            platform_url: https://arduino.esp8266.com/stable/package_esp8266com_index.json
+
+          # ESP32 sketches
+          - name: esp32/enroll
+            path: esp32/enroll
+            fqbn: esp32:esp32:esp32
+            platform: esp32:esp32
+            platform_url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          - name: esp32/reader
+            path: esp32/reader
+            fqbn: esp32:esp32:esp32
+            platform: esp32:esp32
+            platform_url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          - name: esp32/enroll_read
+            path: esp32/enroll_read
+            fqbn: esp32:esp32:esp32
+            platform: esp32:esp32
+            platform_url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install platform
+        run: |
+          if [ -n "${{ matrix.sketch.platform_url }}" ]; then
+            arduino-cli config init
+            arduino-cli config add board_manager.additional_urls "${{ matrix.sketch.platform_url }}"
+          fi
+          arduino-cli core update-index
+          arduino-cli core install ${{ matrix.sketch.platform }}
+
+      - name: Install libraries
+        run: |
+          arduino-cli lib install "Adafruit Fingerprint Sensor Library"
+          arduino-cli lib install "Adafruit SSD1306"
+          arduino-cli lib install "Adafruit GFX Library"
+          arduino-cli lib install "Keypad"
+          arduino-cli lib install "Keypad_I2C"
+
+      - name: Create secrets.h stub for CI
+        run: |
+          cat > secrets_stub.h << 'EOF'
+          const char *ssid = "CI_TEST";
+          const char *password = "CI_TEST";
+          const char *apiKey = "CI_TEST";
+          #define HOST "https://example.com"
+          #define FINGERPRINT "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"
+          EOF
+          # Copy stub to sketches that need it
+          cp secrets_stub.h esp32/enroll_read/secrets.h
+          cp secrets_stub.h esp8266_send/secrets.h
+
+      - name: Compile sketch
+        run: |
+          arduino-cli compile --fqbn ${{ matrix.sketch.fqbn }} ${{ matrix.sketch.path }}
