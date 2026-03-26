@@ -1,2 +1,6 @@
 .DS_Store
 secrets.h
+mobile/secrets.js
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/

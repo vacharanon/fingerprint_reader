@@ -1,0 +1,26 @@
+{
+  "name": "fingerprint-reader-mobile",
+  "version": "1.0.0",
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "expo": "~52.0.46",
+    "expo-local-authentication": "~15.0.2",
+    "expo-status-bar": "~2.0.1",
+    "react": "18.3.1",
+    "react-native": "0.76.6",
+    "@react-navigation/native": "^6.1.18",
+    "@react-navigation/native-stack": "^6.11.0",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.3.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0"
+  },
+  "private": true
+}
