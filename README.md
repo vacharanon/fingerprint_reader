@@ -1,89 +1,114 @@
 # Fingerprint Reader PoC
 
-Proof-of-concept of using cheap Chinese Arduino Uno R3 with Wifi (Atmega328P + ESP8266).
-The one with 8 DIP switches.
+Proof-of-concept using a low-cost Arduino Uno R3 with Wi-Fi (ATmega328P + ESP8266, the 8-DIP-switch variant).
 
-These codes demonstrate Serial communication between Atmega328P MCU and ESP8266.
+Demonstrates serial communication between the ATmega328P MCU and ESP8266, and extends enrollment/verification to a macOS desktop app via Touch ID.
 
 ---
 
-## Mobile App – Enroll via Apple Touch ID / Android Fingerprint
+## Repository structure
 
-The `mobile/` directory contains a **React Native (Expo)** app that lets you
-enroll and verify fingerprints using your phone's built-in biometric sensor:
+```
+fingerprint_reader/
+├── esp32/          — ESP32 firmware (AS608 sensor + Wi-Fi HTTP)
+├── enroll/         — Arduino enrollment sketch
+├── enroll_read/    — Arduino enrollment + read sketch
+├── reader/         — Arduino reader sketch
+├── esp8266_send/   — ESP8266 HTTP send helper
+├── i2c_scanner/    — I²C bus scanner utility
+└── desktop/        — macOS Electron app (Touch ID enrollment/verification)
+```
 
-| Platform | Supported sensors |
-|----------|-------------------|
-| iOS      | Touch ID, Face ID |
-| Android  | Fingerprint, Face Unlock (device-dependent) |
+---
+
+## Hardware – Arduino / ESP32
+
+These sketches demonstrate serial communication between the ATmega328P MCU and an ESP8266, and fingerprint enrollment/verification with the **AS608** optical sensor.
+
+### Requirements
+
+- Arduino Uno R3 with ESP8266 Wi-Fi module (8-DIP-switch board), **or** ESP32
+- AS608 fingerprint sensor
+- Arduino IDE ≥ 1.8 with the [Adafruit Fingerprint Sensor Library](https://github.com/adafruit/Adafruit-Fingerprint-Sensor-Library)
+
+### Configuration
+
+Open `esp32/secrets.h` (copy from `secrets.h.example` if present) and set your Wi-Fi credentials and backend URL.
+
+---
+
+## Desktop App – macOS Touch ID
+
+The `desktop/` directory contains an **Electron** app that lets you enroll and verify fingerprints on any Mac with Touch ID, using `systemPreferences.promptTouchID()`.
 
 ### How it works
 
-The mobile app mirrors the same API contract used by the Arduino/ESP32 firmware.
-After a successful biometric prompt the app sends:
+After a successful Touch ID prompt the app POSTs the same payload used by the Arduino/ESP32 firmware:
 
 ```json
 { "api_key": "<your key>", "id": <slot 1-127> }
 ```
 
-to the same backend endpoint, so the server sees a mobile verification exactly
-like a hardware sensor scan.
+The backend handles desktop and hardware requests identically.
+
+### Requirements
+
+- macOS with Touch ID hardware
+- Node.js ≥ 18
 
 ### Setup
 
 #### 1. Install dependencies
 
 ```bash
-cd mobile
+cd desktop
 npm install
 ```
 
-#### 2. Configure the API endpoint
+#### 2. Configure the backend endpoint
 
 ```bash
-cp mobile/secrets.example.js mobile/secrets.js
+cp desktop/secrets.example.js desktop/secrets.js
 ```
 
-Edit `mobile/secrets.js` and fill in your `HOST` URL and `API_KEY`:
+Edit `desktop/secrets.js` and fill in your values:
 
 ```js
-export const HOST = "https://your-api-host/fingerprint-endpoint";
-export const API_KEY = "your-api-key-here";
+module.exports = {
+  HOST:    "http://YOUR_BACKEND_HOST/fingerprint",
+  API_KEY: "YOUR_API_KEY",
+};
 ```
 
 > `secrets.js` is listed in `.gitignore` and will never be committed.
 
-#### 3. Run on device
+#### 3. Run the app
 
 ```bash
-# iOS simulator / physical device (requires macOS + Xcode)
-cd mobile && npx expo start --ios
-
-# Android emulator / physical device
-cd mobile && npx expo start --android
-```
-
-Or start Expo Dev Server and scan the QR code with the **Expo Go** app:
-
-```bash
-cd mobile && npx expo start
+cd desktop
+npm start
 ```
 
 ### App screens
 
 | Screen | Description |
 |--------|-------------|
-| **Home** | Choose between Enroll and Verify |
-| **Enroll** | Enter a slot ID (1–127), authenticate with Touch ID/Fingerprint, and register the enrollment with the backend |
-| **Verify** | Enter your slot ID, authenticate with Touch ID/Fingerprint, and notify the backend of a successful verification |
+| **Home** | Navigate to Enroll or Verify |
+| **Enroll** | Enter a slot ID (1–127), approve the Touch ID prompt, and register the slot with the backend |
+| **Verify** | Enter your slot ID, approve the Touch ID prompt, and confirm verification with the backend |
 
-### iOS – required permission
+### Project layout
 
-The `NSFaceIDUsageDescription` key is already set in `mobile/app.json`.
-When building a production `.ipa` you do **not** need to add it manually.
-
-### Android – required permissions
-
-`USE_BIOMETRIC` and `USE_FINGERPRINT` are already declared in `mobile/app.json`.
+```
+desktop/
+├── main.js               — Electron main process; Touch ID + HTTP to backend
+├── preload.js            — contextBridge (contextIsolation: true, nodeIntegration: false)
+├── package.json          — dependencies and npm start script
+├── secrets.example.js    — template for secrets.js
+└── renderer/
+    ├── index.html        — single-page app shell
+    ├── app.js            — screen navigation and backend integration
+    └── styles.css        — macOS-native styling (system font, hiddenInset title bar)
+```
 
 ---
