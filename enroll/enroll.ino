@@ -35,7 +35,7 @@ Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   if (!oled.begin(SSD1306_SWITCHCAPVCC, OLED_SCREEN_ADDRESS)) {
     Serial.println("SSD1306 allocation failed");
     for(;;); // Don't proceed, loop forever

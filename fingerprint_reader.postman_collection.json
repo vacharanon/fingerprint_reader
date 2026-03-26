@@ -1,0 +1,244 @@
+{
+  "info": {
+    "_postman_id": "fingerprint-reader-api",
+    "name": "Fingerprint Reader API",
+    "description": "Backend API used by the Fingerprint Reader PoC to report matched fingerprint IDs.\n\nTwo authentication styles exist:\n- **ESP32 (current):** Bearer token in Authorization header\n- **ESP8266 (legacy):** API key in request body\n\nConfigure the `base_url` and `api_key` variables before use.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://your-backend-api.example.com",
+      "type": "string",
+      "description": "Backend base URL (matches HOST in secrets.h)"
+    },
+    {
+      "key": "endpoint_path",
+      "value": "/endpoint",
+      "type": "string",
+      "description": "API endpoint path"
+    },
+    {
+      "key": "api_key",
+      "value": "YOUR_API_KEY",
+      "type": "string",
+      "description": "API key for authentication (matches apiKey in secrets.h)"
+    }
+  ],
+  "item": [
+    {
+      "name": "ESP32",
+      "description": "Requests using the current ESP32 authentication style (Bearer token in header).",
+      "item": [
+        {
+          "name": "Report Fingerprint Match",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 15\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}{{endpoint_path}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{endpoint_path}}"]
+            },
+            "description": "Sent by the ESP32 when a fingerprint is successfully matched.\n\n- `id` (integer, 1–128): The matched fingerprint template ID.\n- Authentication via `Authorization: Bearer` header."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{api_key}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": 15\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{base_url}}{{endpoint_path}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{endpoint_path}}"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\"status\": \"ok\"}"
+            },
+            {
+              "name": "Unauthorized",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer invalid_key" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": 15\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{base_url}}{{endpoint_path}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{endpoint_path}}"]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\"error\": \"Unauthorized\"}"
+            }
+          ]
+        },
+        {
+          "name": "Report Fingerprint Match (Missing Auth)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 15\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}{{endpoint_path}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{endpoint_path}}"]
+            },
+            "description": "Negative test — sends a fingerprint match report without the Authorization header. Expects 401."
+          },
+          "response": []
+        },
+        {
+          "name": "Report Fingerprint Match (Invalid ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}{{endpoint_path}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{endpoint_path}}"]
+            },
+            "description": "Negative test — ID 0 is invalid (valid range is 1–128). Expects 400."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "ESP8266 (Legacy)",
+      "description": "Requests using the legacy ESP8266 authentication style (API key in request body).\n\nThis approach is deprecated — SEC-03 tracks migrating to Bearer token auth.",
+      "item": [
+        {
+          "name": "Report Fingerprint Match (Legacy)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"api_key\": \"{{api_key}}\",\n  \"id\": 15\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}{{endpoint_path}}",
+              "host": ["{{base_url}}"],
+              "path": ["{{endpoint_path}}"]
+            },
+            "description": "Legacy ESP8266 request format — API key is sent in the JSON body instead of the Authorization header.\n\n- `api_key` (string): Authentication key\n- `id` (integer, 1–128): Matched fingerprint template ID"
+          },
+          "response": [
+            {
+              "name": "Success (Legacy)",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"api_key\": \"{{api_key}}\",\n  \"id\": 15\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{base_url}}{{endpoint_path}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{endpoint_path}}"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": "{\"status\": \"ok\"}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
