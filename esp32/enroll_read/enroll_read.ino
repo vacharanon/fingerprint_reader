@@ -30,6 +30,7 @@ Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial2);
 
 #define RED_LED 12
 #define GREEN_LED 13
+#define BUZZER_PIN 32
 
 // Keypad and OLED are using I2C (SCL/SDA) but different address
 // Use i2c_scanner to lookup
@@ -46,6 +47,82 @@ byte rowPins[ROWS] = { 0, 1, 2, 3 };  // เชื่อมต่อกับ Pi
 byte colPins[COLS] = { 4, 5, 6, 7 };  // เชื่อมต่อกับ Pin คอลัมน์ของปุ่มกด
 Keypad_I2C keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS, KEYPAD_ADDRESS, PCF8574);
 uint8_t mode = 1;
+
+#define REST 0
+
+// Frequencies (Hz)
+#define NOTE_Db4 277
+#define NOTE_D4  294
+#define NOTE_Eb4 311
+#define NOTE_E4  330
+#define NOTE_F4  349
+#define NOTE_Gb4 370
+#define NOTE_G4  392
+#define NOTE_Ab4 415
+#define NOTE_A4  440
+#define NOTE_Bb4 466
+#define NOTE_B4  494
+#define NOTE_C5  523
+#define NOTE_Db5 554
+#define NOTE_D5  587
+#define NOTE_Eb5 622
+#define NOTE_E5  659
+#define NOTE_F5  698
+#define NOTE_Gb5 740
+#define NOTE_G5  784
+#define NOTE_Ab5 831
+#define NOTE_A5  880
+#define NOTE_Bb5 932
+#define NOTE_B5  988
+
+// ── Success melody (Imperial March opening phrase) ───────────────────────────
+
+#define SUCCESS_TEMPO 108
+
+int successMelody[] = {
+  NOTE_A4, NOTE_A4, NOTE_A4, NOTE_F4, NOTE_C5,
+  NOTE_A4, NOTE_F4, NOTE_C5, NOTE_A4
+};
+
+int successDurations[] = {
+  4, 4, 4, -8, 16,
+  4, -8, 16, 2
+};
+
+void playSuccessMelody() {
+  int wholenote = (60000 * 4) / SUCCESS_TEMPO;
+  int numNotes = sizeof(successMelody) / sizeof(successMelody[0]);
+
+  for (int i = 0; i < numNotes; i++) {
+    int d = successDurations[i];
+    int noteDuration = (d > 0) ? wholenote / d : (wholenote / abs(d)) * 3 / 2;
+
+    if (successMelody[i] != REST) {
+      tone(BUZZER_PIN, successMelody[i], noteDuration * 9 / 10);
+    }
+    delay(noteDuration);
+    noTone(BUZZER_PIN);
+  }
+}
+
+// ── Failed melody (Pac-Man death: descending chromatic, slowing down) ────────
+
+int failMelody[] = {
+  NOTE_B5, NOTE_A5, NOTE_G5, NOTE_F5,
+  NOTE_Eb5, NOTE_C5, NOTE_A4, NOTE_Ab4
+};
+
+void playFailedMelody() {
+  int numNotes = sizeof(failMelody) / sizeof(failMelody[0]);
+  int baseDuration = 60; // ms for first note; increases each step
+
+  for (int i = 0; i < numNotes; i++) {
+    int noteDuration = baseDuration + i * 18;
+    tone(BUZZER_PIN, failMelody[i], noteDuration * 9 / 10);
+    delay(noteDuration);
+    noTone(BUZZER_PIN);
+  }
+}
 
 const char *host = HOST;
 bool wifiReady = false;
@@ -64,6 +141,7 @@ void setup() {
     Serial.println("OLED connected");
   }
 
+  pinMode(BUZZER_PIN, OUTPUT);
   pinMode(RED_LED, OUTPUT);
   pinMode(GREEN_LED, OUTPUT);
   digitalWrite(RED_LED, HIGH);
@@ -234,75 +312,99 @@ void loop()  // run over and over again
       Serial.print("\n");
       delay(1000);
 
-      oled.clearDisplay();
-      oled.setTextColor(WHITE);
-      oled.setCursor(0, 0);
-      oled.setTextSize(3);
-      oled.print("Sending");
-      oled.display();
+      int retryCount = 0;
+      int maxRetries = 3;
+      int httpCode = -1;
 
-      if (http.begin(client, host)) {
-        http.addHeader("Content-Type", "application/json");
+      while (retryCount < maxRetries) {
+        if (http.begin(client, host)) {
+          // if (retryCount > 0) {
+          //   oled.clearDisplay();
+          //   oled.setTextColor(WHITE);
+          //   oled.setCursor(0, 0);
+          //   oled.setTextSize(3);
+          //   oled.print("Retrying");
+          //   oled.display();
+          // } else {
+            oled.clearDisplay();
+            oled.setTextColor(WHITE);
+            oled.setCursor(0, 0);
+            oled.setTextSize(3);
+            oled.print("Sending");
+            oled.display();
+          // }
+          http.addHeader("Content-Type", "application/json");
 
-        // Use the extracted ID in the JSON payload
-        String jsonPayload = "{\"api_key\":\"" + String(apiKey) + "\",\"id\":" + id + "}";
-        int httpCode = http.POST(jsonPayload);
+          // Use the extracted ID in the JSON payload
+          String jsonPayload = "{\"api_key\":\"" + String(apiKey) + "\",\"id\":" + id + "}";
+          httpCode = http.POST(jsonPayload);
 
-        Serial.println(httpCode);
-        
-        if (httpCode == 200) {
-          oled.clearDisplay();
-          oled.setTextColor(WHITE);
-          oled.setCursor(0, 0);
-          oled.setTextSize(3);
-          // oled.print(httpCode);
-          oled.print("OK");
-          oled.display();
-          delay(2000);  
-        } else {
-         switch (httpCode) {
-            case HTTPC_ERROR_CONNECTION_REFUSED:
-              printError("Connection refused", 2);
-              break;
-            case HTTPC_ERROR_SEND_HEADER_FAILED:
-              printError("Send header failed", 2);
-              break;
-            case HTTPC_ERROR_SEND_PAYLOAD_FAILED:
-              printError("Send payload failed", 2);
-              break;
-            case HTTPC_ERROR_NOT_CONNECTED:
-              printError("Not connected", 2);
-              break;
-            case HTTPC_ERROR_CONNECTION_LOST:
-              printError("Connection lost", 2);
-              break;
-            case HTTPC_ERROR_NO_STREAM:
-              printError("No stream", 2);
-              break;
-            case HTTPC_ERROR_NO_HTTP_SERVER:
-              printError("No HTTP server", 2);
-              break;
-            case HTTPC_ERROR_TOO_LESS_RAM:
-              printError("Too less RAM", 2);
-              break;
-            case HTTPC_ERROR_ENCODING:
-              printError("Encoding error", 2);
-              break;
-            case HTTPC_ERROR_STREAM_WRITE:
-              printError("Stream write error", 2);
-              break;
-            case HTTPC_ERROR_READ_TIMEOUT:
-              printError("Read timeout", 2);
-              break;
-            default:
-              printError(String(httpCode), 3);
+          Serial.println(httpCode);
+          
+          if (httpCode == 200) {
+            playSuccessMelody();
+            digitalWrite(RED_LED, LOW);
+            digitalWrite(GREEN_LED, HIGH);
+            oled.clearDisplay();
+            oled.setTextColor(WHITE);
+            oled.setCursor(0, 0);
+            oled.setTextSize(3);
+            // oled.print(httpCode);
+            oled.print("OK");
+            oled.display();
+            delay(2000);
+            break; 
+          } else {
+            if (retryCount >= maxRetries - 1) {
+              // if this is the last retry
+              switch (httpCode) {
+                case HTTPC_ERROR_CONNECTION_REFUSED:
+                  printError("Connection refused", 2);
+                  break;
+                case HTTPC_ERROR_SEND_HEADER_FAILED:
+                  printError("Send header failed", 2);
+                  break;
+                case HTTPC_ERROR_SEND_PAYLOAD_FAILED:
+                  printError("Send payload failed", 2);
+                  break;
+                case HTTPC_ERROR_NOT_CONNECTED:
+                  printError("Not connected", 2);
+                  break;
+                case HTTPC_ERROR_CONNECTION_LOST:
+                  printError("Connection lost", 2);
+                  break;
+                case HTTPC_ERROR_NO_STREAM:
+                  printError("No stream", 2);
+                  break;
+                case HTTPC_ERROR_NO_HTTP_SERVER:
+                  printError("No HTTP server", 2);
+                  break;
+                case HTTPC_ERROR_TOO_LESS_RAM:
+                  printError("Too less RAM", 2);
+                  break;
+                case HTTPC_ERROR_ENCODING:
+                  printError("Encoding error", 2);
+                  break;
+                case HTTPC_ERROR_STREAM_WRITE:
+                  printError("Stream write error", 2);
+                  break;
+                case HTTPC_ERROR_READ_TIMEOUT:
+                  printError("Read timeout", 2);
+                  break;
+                default:
+                  printError(String(httpCode), 3);
+              }
+              playFailedMelody();
+              delay(2000);
+            } else {
+              delay(100);
+            }
           }
         }
         http.end();
+        retryCount++;
+        
       }
-
-      digitalWrite(RED_LED, LOW);
-      digitalWrite(GREEN_LED, HIGH);
     }
   } else if (mode == 2) {
     digitalWrite(RED_LED, HIGH);
