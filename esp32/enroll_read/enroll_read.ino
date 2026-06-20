@@ -30,7 +30,7 @@ Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial2);
 
 #define RED_LED 12
 #define GREEN_LED 13
-#define BUZZER_PIN 32
+#define BUZZER_PIN 33
 
 // Keypad and OLED are using I2C (SCL/SDA) but different address
 // Use i2c_scanner to lookup
@@ -342,7 +342,6 @@ void loop()  // run over and over again
           Serial.println(httpCode);
           
           if (httpCode == 200) {
-            playSuccessMelody();
             digitalWrite(RED_LED, LOW);
             digitalWrite(GREEN_LED, HIGH);
             oled.clearDisplay();
@@ -352,7 +351,7 @@ void loop()  // run over and over again
             // oled.print(httpCode);
             oled.print("OK");
             oled.display();
-            delay(2000);
+            playSuccessMelody();
             break; 
           } else {
             if (retryCount >= maxRetries - 1) {
