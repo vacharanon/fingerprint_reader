@@ -1,0 +1,13 @@
+{
+  "name": "fingerprint-reader-desktop",
+  "version": "1.0.0",
+  "description": "macOS desktop app for fingerprint enrollment and verification via Touch ID",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^33.0.0"
+  },
+  "private": true
+}
